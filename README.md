@@ -159,6 +159,12 @@ Portfolio data persists in the `terminal-data` volume (SQLite, WAL mode). Ports 
 
 <br/>
 
+## ▲ Vercel
+
+The web app deploys to Vercel. The API needs a host with a persistent disk. See [docs/deploy-vercel.md](docs/deploy-vercel.md).
+
+<br/>
+
 ## 🧱 Tech stack
 
 | Layer | Stack |

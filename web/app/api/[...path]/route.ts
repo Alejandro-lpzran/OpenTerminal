@@ -4,9 +4,23 @@ import { getApiKey } from "@/lib/api-key";
 // A route handler (rather than next.config.ts rewrites) because rewrites
 // can't attach a header to the proxied request — and the shared API key
 // must never reach the browser, only travel server-to-server.
-const API_URL = process.env.API_URL ?? "http://localhost:4000";
+const API_URL = (process.env.API_URL ?? "http://localhost:4000").replace(/\/+$/, "");
+
+// On Vercel (VERCEL=1) the API runs on another host and there is no shared
+// data/.api-key file, so both must be configured explicitly — fail with a
+// readable error instead of an opaque fetch failure to localhost.
+const missingConfig = process.env.VERCEL
+  ? ["API_URL", "API_KEY"].filter((name) => !process.env[name])
+  : [];
 
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
+  if (missingConfig.length > 0) {
+    return NextResponse.json(
+      { error: `web is missing environment variables: ${missingConfig.join(", ")}` },
+      { status: 500 }
+    );
+  }
+
   const url = `${API_URL}/api/${path.join("/")}${req.nextUrl.search}`;
   const apiKey = getApiKey();
 
@@ -21,12 +35,17 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE";
 
-  const upstream = await fetch(url, {
-    method: req.method,
-    headers,
-    body: hasBody ? await req.text() : undefined,
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      method: req.method,
+      headers,
+      body: hasBody ? await req.text() : undefined,
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json({ error: "API server unreachable" }, { status: 502 });
+  }
 
   const body = upstream.status === 204 ? null : await upstream.arrayBuffer();
   return new NextResponse(body, {
