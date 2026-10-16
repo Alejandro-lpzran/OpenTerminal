@@ -6,12 +6,10 @@ import { getApiKey } from "@/lib/api-key";
 // must never reach the browser, only travel server-to-server.
 const API_URL = (process.env.API_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 
-// On Vercel (VERCEL=1) the API runs on another host and there is no shared
-// data/.api-key file, so both must be configured explicitly — fail with a
-// readable error instead of an opaque fetch failure to localhost.
-const missingConfig = process.env.VERCEL
-  ? ["API_URL", "API_KEY"].filter((name) => !process.env[name])
-  : [];
+// On Vercel (VERCEL=1) the API is a separate deployment, so its URL must be
+// configured — fail with a readable error instead of an opaque fetch failure
+// to localhost. API_KEY is only needed for the AI assistant (see AI_ENABLED).
+const missingConfig = process.env.VERCEL && !process.env.API_URL ? ["API_URL"] : [];
 
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   if (missingConfig.length > 0) {

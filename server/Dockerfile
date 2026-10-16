@@ -10,7 +10,7 @@ RUN npm run build --prefix server
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
-# Mount a persistent volume here: it holds terminal.db (portfolios).
+# Mount a volume here: it holds the generated .api-key the web app reads.
 ENV DATA_DIR=/app/data
 COPY server/package.json ./
 RUN npm install --omit=dev

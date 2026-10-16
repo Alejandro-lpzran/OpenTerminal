@@ -1,37 +1,31 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { apiGet, apiPost, apiDelete, fmt, pctClass, type Quote } from "../../lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { apiGet, fmt, pctClass, type Quote } from "../../lib/api";
 import { symbolsParam } from "../../lib/symbol";
-
-type Portfolio = { id: number; name: string };
-type Position = { symbol: string; quantity: number; avgCost: number; realizedPnl: number };
-type Tx = { id: number; symbol: string; side: string; quantity: number; price: number; executed_at: string };
+import { computePositions, usePortfolio } from "../../store/portfolio";
 
 export default function PortfolioWidget() {
-  const qc = useQueryClient();
+  const portfolios = usePortfolio((s) => s.portfolios);
+  const allTxs = usePortfolio((s) => s.transactions);
+  const addTransaction = usePortfolio((s) => s.addTransaction);
+  const removeTransaction = usePortfolio((s) => s.removeTransaction);
   const [portfolioId, setPortfolioId] = useState<number | null>(null);
   const [showTx, setShowTx] = useState(false);
   const [form, setForm] = useState({ symbol: "", side: "BUY", quantity: "", price: "" });
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: portfolios = [] } = useQuery({
-    queryKey: ["portfolios"],
-    queryFn: () => apiGet<Portfolio[]>("/api/portfolios"),
-  });
   const pid = portfolioId ?? portfolios[0]?.id;
 
-  const { data: positions = [] } = useQuery({
-    queryKey: ["positions", pid],
-    queryFn: () => apiGet<Position[]>(`/api/portfolios/${pid}/positions`),
-    enabled: !!pid,
-  });
-
-  const { data: txs = [] } = useQuery({
-    queryKey: ["transactions", pid],
-    queryFn: () => apiGet<Tx[]>(`/api/portfolios/${pid}/transactions`),
-    enabled: !!pid && showTx,
-  });
+  const txs = useMemo(
+    () =>
+      allTxs
+        .filter((t) => t.portfolioId === pid)
+        .sort((a, b) => b.executed_at.localeCompare(a.executed_at) || b.id - a.id),
+    [allTxs, pid]
+  );
+  const positions = useMemo(() => computePositions(txs), [txs]);
 
   const symbols = positions.map((p) => p.symbol);
   const { data: quotes = [] } = useQuery({
@@ -41,21 +35,19 @@ export default function PortfolioWidget() {
     refetchInterval: 30_000,
   });
 
-  const addTx = useMutation({
-    mutationFn: () =>
-      apiPost(`/api/portfolios/${pid}/transactions`, {
-        symbol: form.symbol,
-        side: form.side,
-        quantity: Number(form.quantity),
-        price: Number(form.price),
-        executed_at: new Date().toISOString(),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["positions", pid] });
-      qc.invalidateQueries({ queryKey: ["transactions", pid] });
-      setForm({ symbol: "", side: "BUY", quantity: "", price: "" });
-    },
-  });
+  const addTx = () => {
+    if (pid === undefined) return;
+    const err = addTransaction({
+      portfolioId: pid,
+      symbol: form.symbol,
+      side: form.side === "SELL" ? "SELL" : "BUY",
+      quantity: Number(form.quantity),
+      price: Number(form.price),
+      executed_at: new Date().toISOString(),
+    });
+    setError(err);
+    if (!err) setForm({ symbol: "", side: "BUY", quantity: "", price: "" });
+  };
 
   const totals = positions.reduce(
     (acc, p) => {
@@ -92,7 +84,7 @@ export default function PortfolioWidget() {
         className="flex gap-1 p-1 border-b border-[var(--border)]"
         onSubmit={(e) => {
           e.preventDefault();
-          if (form.symbol && form.quantity && form.price) addTx.mutate();
+          if (form.symbol && form.quantity && form.price) addTx();
         }}
       >
         <input className="w-20" placeholder="Ticker" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })} />
@@ -102,7 +94,7 @@ export default function PortfolioWidget() {
         <input className="w-20" placeholder="Qty" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
         <input className="w-24" placeholder="Price" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
         <button className="term-btn" type="submit">ADD</button>
-        {addTx.error && <span className="down">{(addTx.error as Error).message}</span>}
+        {error && <span className="down">{error}</span>}
       </form>
 
       {!showTx ? (
@@ -146,11 +138,7 @@ export default function PortfolioWidget() {
                 <td>
                   <button
                     className="dim hover:text-[var(--down)]"
-                    onClick={async () => {
-                      await apiDelete(`/api/portfolios/${pid}/transactions/${t.id}`);
-                      qc.invalidateQueries({ queryKey: ["positions", pid] });
-                      qc.invalidateQueries({ queryKey: ["transactions", pid] });
-                    }}
+                    onClick={() => removeTransaction(t.id)}
                   >
                     ✕
                   </button>

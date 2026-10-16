@@ -1,22 +1,34 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { NextFunction, Request, Response } from "express";
-import { dataDir } from "./db.js";
 
+// DATA_DIR lets the Docker image point this at the mounted volume: once
+// compiled, dist/auth.js sits two levels below /app instead of server/src, so
+// the source-relative default below would otherwise resolve outside /app.
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const dataDir = process.env.DATA_DIR ?? join(root, "data");
 const keyFile = join(dataDir, ".api-key");
 
 function resolveApiKey(): string {
   if (process.env.API_KEY) return process.env.API_KEY;
   if (existsSync(keyFile)) return readFileSync(keyFile, "utf8").trim();
   const generated = randomBytes(24).toString("hex");
-  writeFileSync(keyFile, generated, { mode: 0o600 });
+  try {
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(keyFile, generated, { mode: 0o600 });
+  } catch {
+    // Read-only filesystem (e.g. Vercel): keep the key in memory only. Nobody
+    // else can learn it, so the key-protected AI endpoint stays locked.
+    console.warn("Could not save a generated API key; set API_KEY to use /api/ai.");
+  }
   return generated;
 }
 
 export const apiKey = resolveApiKey();
 
-if (!process.env.API_KEY) {
+if (!process.env.API_KEY && existsSync(keyFile)) {
   console.warn(
     `No API_KEY set — generated one and saved it to ${keyFile}. ` +
       "The bundled web app reads this file automatically for local use. " +

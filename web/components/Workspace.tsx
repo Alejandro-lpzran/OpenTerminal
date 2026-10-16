@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import GridLayout, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import { AI_ENABLED } from "../lib/features";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
 import QuoteWidget from "./widgets/QuoteWidget";
@@ -99,8 +100,11 @@ const TITLES: Record<string, string> = {
 };
 
 export default function Workspace() {
-  const widgets = useTerminal((s) => s.widgets);
-  const layout = useTerminal((s) => s.layout);
+  const allWidgets = useTerminal((s) => s.widgets);
+  const allLayout = useTerminal((s) => s.layout);
+  // Hide AI widgets saved in a workspace from before the assistant was hidden.
+  const widgets = AI_ENABLED ? allWidgets : allWidgets.filter((w) => w.type !== "ai");
+  const layout = AI_ENABLED ? allLayout : allLayout.filter((l) => widgets.some((w) => w.id === l.i));
   const setLayout = useTerminal((s) => s.setLayout);
   const removeWidget = useTerminal((s) => s.removeWidget);
   const toggleLinked = useTerminal((s) => s.toggleLinked);

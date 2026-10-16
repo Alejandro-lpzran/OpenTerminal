@@ -1,8 +1,9 @@
 "use client";
 
+import { AI_ENABLED } from "../lib/features";
 import { useTerminal, type WidgetType } from "../store/terminal";
 
-const ITEMS: Array<{ type: WidgetType; label: string; key: string }> = [
+const ALL_ITEMS: Array<{ type: WidgetType; label: string; key: string }> = [
   { type: "chart", label: "CHART", key: "⌥1" },
   { type: "quote", label: "QUOTE", key: "⌥2" },
   { type: "news", label: "NEWS", key: "⌥3" },
@@ -19,6 +20,7 @@ const ITEMS: Array<{ type: WidgetType; label: string; key: string }> = [
   { type: "tv", label: "LIVE TV", key: "" },
   { type: "recap", label: "MARKET RECAP", key: "" },
 ];
+const ITEMS = AI_ENABLED ? ALL_ITEMS : ALL_ITEMS.filter((item) => item.type !== "ai");
 
 export default function Sidebar() {
   const addWidget = useTerminal((s) => s.addWidget);

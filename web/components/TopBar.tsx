@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { apiGet } from "../lib/api";
+import { AI_ENABLED } from "../lib/features";
 import { useTerminal } from "../store/terminal";
 
 type Status = {
@@ -69,7 +70,7 @@ export default function TopBar() {
           ? healthy.map((p) => `${p.name} ${p.lastLatencyMs ?? "—"}ms`).join(" · ")
           : "connecting…"}
       </span>
-      <span className={status?.ai ? "up" : "dim"}>AI {status?.ai ? "●" : "○"}</span>
+      {AI_ENABLED && <span className={status?.ai ? "up" : "dim"}>AI {status?.ai ? "●" : "○"}</span>}
     </header>
   );
 }

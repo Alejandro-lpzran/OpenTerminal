@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import { marketRouter } from "./routes/market.js";
-import { portfolioRouter } from "./routes/portfolio.js";
 import { aiRouter } from "./routes/ai.js";
 import { allStats } from "./providers/registry.js";
 import { requireApiKey } from "./auth.js";
@@ -30,13 +29,13 @@ app.use(cors({ origin: webOrigin }));
 app.use(express.json());
 
 // No API key here by design (market.ts routes proxy free, keyless public data),
-// but still bounded per-IP: unlike /api/ai and /api/portfolios, an unauthenticated
+// but still bounded per-IP: unlike /api/ai, an unauthenticated
 // caller could otherwise repeat the multi-provider fan-out in market.ts (up to
 // hundreds of outbound calls per request — see getQuotes) fast enough to get
 // this deployment's IP rate-limited or banned by Nasdaq/Yahoo/Stooq/SEC.
 app.use("/api", rateLimit({ windowMs: 60_000, max: 240 }), marketRouter);
-// Portfolio data and the paid AI endpoint require a shared secret; see auth.ts.
-app.use("/api/portfolios", requireApiKey, portfolioRouter);
+// The paid AI endpoint requires a shared secret; see auth.ts. (Portfolios
+// live in the browser — see web/store/portfolio.ts.)
 app.use(
   "/api/ai",
   requireApiKey,

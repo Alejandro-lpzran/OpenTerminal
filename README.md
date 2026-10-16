@@ -45,9 +45,9 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 - ⛓️ **Options chain** — calls and puts side‑by‑side with strike, bid/ask, volume, open interest, and ITM highlighting
 - 🪙 **Crypto board** — top assets with 7‑day sparklines, BTC/ETH dominance, and full OHLCV charting for any listed coin
 - 🏦 **Macro dashboard** — live US Treasury yield curve, VIX, and major index/commodity proxies
-- 💼 **Portfolio tracker** — log buy/sell transactions, track average cost, realized & unrealized P&L (persisted in SQLite)
+- 💼 **Portfolio tracker** — log buy/sell transactions, track average cost, realized & unrealized P&L (saved in your browser)
 - 📅 **Calendar** — economic events (Fed, ECB, CPI, NFP and more) with consensus forecast, previous reading and, for the major US/EU releases, the actual outcome; plus a per‑watchlist earnings calendar with click‑through history showing forecast vs. actual EPS for the last several quarters and the stock's next‑day price move
-- 🤖 **AI assistant** (optional) — ask questions about the symbol you're looking at, powered by Claude, fully context‑aware of the terminal's current data
+- 🤖 **AI assistant** (optional, hidden by default) — ask questions about the symbol you're looking at, powered by Claude, fully context‑aware of the terminal's current data
 - ⚡ **Near real‑time updates** — quotes and indexes refresh every second with a subtle flash on change, so you always know what just moved
 - ⌨️ **Keyboard shortcuts** everywhere — `⌘K` to search, `⌥1`–`⌥9` to add any widget
 
@@ -128,12 +128,15 @@ That's it — no `.env` file required to get a fully working terminal.
 
 ### Optional: AI assistant
 
+The assistant is hidden unless you turn it on:
+
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
+export NEXT_PUBLIC_AI_ENABLED=1
 npm run dev
 ```
 
-Without a key, everything else still works — the AI widget just shows a friendly "unavailable" message instead of failing.
+`NEXT_PUBLIC_AI_ENABLED=1` shows the AI widget (sidebar entry, `⌥9`, and the AI status light). It's read when the web app starts or builds, so restart after changing it. With the widget shown but no API key, it displays a friendly "unavailable" message instead of failing.
 
 Two optional knobs for the assistant, both standard for the Anthropic SDK:
 
@@ -143,7 +146,7 @@ Two optional knobs for the assistant, both standard for the Anthropic SDK:
 ### Security defaults
 
 - The API binds to `127.0.0.1` and only accepts browser requests from `http://localhost:3000` by default — nothing else on your network can reach it out of the box.
-- The portfolio and AI endpoints require a shared secret. If you don't set `API_KEY` yourself, the API generates one on first run and saves it to `data/.api-key`; the bundled web app reads that file automatically, so local dev stays zero-config.
+- The AI endpoint requires a shared secret. If you don't set `API_KEY` yourself, the API generates one on first run and saves it to `data/.api-key`; the bundled web app reads that file automatically, so local dev stays zero-config.
 - To expose this beyond your own machine, set `API_HOST=0.0.0.0`, `API_KEY=<a-strong-secret>` (on both the api and web processes), and `WEB_ORIGIN=<your actual origin>` explicitly. Don't do this without also keeping dependencies patched — see [Known limitations](#known-limitations) below.
 - The `/api/ai` rate limit (10 req/min) keys on `req.ip`. Calls made through the bundled web proxy all arrive from that proxy's own address, so by default every caller sharing it shares one bucket. If you're serving more than one real user through it, set `TRUST_PROXY=1` on the api process **only if** you also run your own reverse proxy in front of the web service that sets `X-Forwarded-For` from the real client and doesn't let visitors set it themselves — otherwise a caller can forge that header to dodge the limit.
 
@@ -155,13 +158,13 @@ Two optional knobs for the assistant, both standard for the Anthropic SDK:
 docker compose up --build
 ```
 
-Portfolio data persists in the `terminal-data` volume (SQLite, WAL mode). Ports are published on `127.0.0.1` only by default; see [Security defaults](#security-defaults) to expose it deliberately.
+The `terminal-data` volume holds the generated API key that the web container reads. Ports are published on `127.0.0.1` only by default; see [Security defaults](#security-defaults) to expose it deliberately.
 
 <br/>
 
 ## ▲ Vercel
 
-The web app deploys to Vercel. The API needs a host with a persistent disk. See [docs/deploy-vercel.md](docs/deploy-vercel.md).
+Both the web app and the API deploy to Vercel's free Hobby plan as two projects. See [docs/deploy-vercel.md](docs/deploy-vercel.md).
 
 <br/>
 
@@ -172,7 +175,7 @@ The web app deploys to Vercel. The API needs a host with a persistent disk. See 
 | Frontend | Next.js 15 · React 19 · TypeScript · Tailwind CSS 4 · Zustand · TanStack Query |
 | Charts | `lightweight-charts` (candles/indicators) · D3 (heatmap treemap) · Recharts (yield curve) |
 | Backend | Node.js · Express · TypeScript |
-| Database | SQLite (`better-sqlite3`, WAL mode) |
+| Storage | Browser `localStorage` (workspace layout, watchlist, portfolios) — the API is stateless |
 | AI | Anthropic Claude (optional) |
 
 <br/>
@@ -183,14 +186,13 @@ The web app deploys to Vercel. The API needs a host with a persistent disk. See 
 ├── server/                  # Express + TypeScript API
 │   └── src/
 │       ├── providers/       # nasdaq, tradingview, yahoo, stooq, fred, econcalendar, coingecko, binance, news
-│       ├── routes/          # market, portfolio, ai
-│       ├── cache.ts         # TTL cache with stale-while-revalidate fallback
-│       └── db.ts            # SQLite (better-sqlite3, WAL)
+│       ├── routes/          # market, ai
+│       └── cache.ts         # TTL cache with stale-while-revalidate fallback
 └── web/                      # Next.js 15 + React 19 + Tailwind 4
     ├── components/           # TopBar, Sidebar, Workspace, CommandPalette
     ├── components/widgets/   # Chart, Quote, Watchlist, News, Screener, Heatmap, Crypto, Options, Macro, Portfolio, Calendar, AI
     ├── lib/                  # API client, technical indicators
-    └── store/                # Zustand store (workspace layout, persisted)
+    └── store/                # Zustand stores (workspace layout, portfolios), saved in localStorage
 ```
 
 Run tests with `npm test` (Vitest, no network calls). CI runs on every push — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
@@ -202,7 +204,6 @@ Run tests with `npm test` (Vitest, no network calls). CI runs on every push — 
 - [ ] Chart drawing tools & multi‑asset comparison overlay
 - [ ] Black‑Scholes Greeks on the options chain
 - [ ] Price alerts with desktop notifications
-- [ ] PostgreSQL as an alternative to SQLite
 
 Have an idea? [Open an issue](../../issues) — contributions are very welcome.
 

@@ -5,6 +5,7 @@ import TopBar from "./TopBar";
 import Sidebar from "./Sidebar";
 import Workspace from "./Workspace";
 import CommandPalette from "./CommandPalette";
+import { AI_ENABLED } from "../lib/features";
 import { useTerminal } from "../store/terminal";
 
 export default function Terminal() {
@@ -28,7 +29,7 @@ export default function Terminal() {
           "6": () => addWidget("crypto"),
           "7": () => addWidget("options"),
           "8": () => addWidget("portfolio"),
-          "9": () => addWidget("ai"),
+          ...(AI_ENABLED && { "9": () => addWidget("ai") }),
         };
         const fn = map[e.key];
         if (fn) {
